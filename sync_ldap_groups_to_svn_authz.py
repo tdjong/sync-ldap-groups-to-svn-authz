@@ -28,6 +28,10 @@
 # THE SOFTWARE.
 ################################################################################
 
+###############################################################################
+# Original Source: https://github.com/whitlockjc/sync-ldap-groups-to-svn-authz
+################################################################################
+
 import ConfigParser, datetime, getpass, os, re, sys, tempfile, shutil
 from optparse import OptionParser
 
@@ -88,6 +92,10 @@ except ImportError:
 # Useful if your group names contain non-word characters, i.e. not in [A-Za-z0-9_].
 #keep_names = False
 
+# Keep the exact LDAP userid attribute value
+# Useful if your LDAP is not consistent in casing
+#keep_userid = False
+
 # Do not show logging information, except exit messages.
 #silent = False
 
@@ -114,7 +122,9 @@ def bind():
   """This function will bind to the LDAP instance and return an ldapobject."""
 
   ldapobject = ldap.initialize(url)
-
+  # TDJ 29-6: REFERRALS cause ldap.OPERATIONS_ERROR with AD
+  if (use_referrals == 0):
+	ldapobject.set_option(ldap.OPT_REFERRALS,0)
   ldapobject.bind_s(bind_dn, bind_password)
 
   if verbose:
@@ -221,7 +231,9 @@ def get_members_from_group(group, ldapobject):
               sys.stdout.write(".")
             else:
               sys.stderr.write(".")
-          members.append(str.lower(attrs[userid_attribute][0]))
+          #members.append(str.lower(attrs[userid_attribute][0]))
+		  # tijdelijk uitzetten forceren naar kleine letters, omdat samAccountName hoofdlettergevoelig wordt gematcht
+          members.append(attrs[userid_attribute][0])
         else:
           if not silent:
             sys.stderr.write("[WARNING]: %s does not have the %s attribute...\n" \
@@ -495,6 +507,7 @@ def load_cli_properties(parser):
   global followgroups
   global authz_path
   global keep_names
+  global use_referrals
   global silent
   global verbose
   
@@ -514,6 +527,7 @@ def load_cli_properties(parser):
   followgroups = options.followgroups
   authz_path = options.authz_path
   keep_names = options.keep_names
+  use_referrals = options.use_referrals
   silent = options.silent
   verbose = options.verbose
   
@@ -582,6 +596,10 @@ def create_cli_parser():
                     help="Keep the exact LDAP group names without alteration. " \
                          "Useful if your group names contain non-word " \
                          "characters, i.e. not in [A-Za-z0-9_].")
+  parser.add_option("-r", "--use-referrals", action="store_true",
+                    dest="use_referrals", default=False,
+                    help="Use node referrals within LDAP" \
+                         "Try to disable in case of OPERATIONS_ERROR.")
   parser.add_option("-q", "--quiet", action="store_true",
                     dest="silent", default=False,
                     help="Do not show logging information, except exit messages.")
